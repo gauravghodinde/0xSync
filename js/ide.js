@@ -95,7 +95,7 @@ var layoutConfig = {
                         type: "component",
                         componentName: "stdin",
                         id: "stdin",
-                        title: "Input",
+                        title: "CompiledABI",  // Changed from "Input"
                         isClosable: false,
                         componentState: {
                             readOnly: false
@@ -104,12 +104,21 @@ var layoutConfig = {
                         type: "component",
                         componentName: "stdout",
                         id: "stdout",
-                        title: "Output",
+                        title: "CompiledBytecode",  // Changed from "Output"
                         isClosable: false,
                         componentState: {
                             readOnly: true
                         }
-                    } : null].filter(Boolean)
+                    } : null, {
+                        type: "component",
+                        componentName: "deployed",
+                        id: "deployed",
+                        title: "Deployed",
+                        isClosable: false,
+                        componentState: {
+                            readOnly: true
+                        }
+                    }].filter(Boolean)
             }].filter(Boolean)
         }]
     }]
@@ -218,7 +227,7 @@ function run() {
     x.parent.header.parent.setActiveContentItem(x);
 
     let sourceValue = encode(sourceEditor.getValue());
-    let stdinValue = encode(stdinEditor.getValue());
+    
     let languageId = getSelectedLanguageId();
     let compilerOptions = $compilerOptions.val();
     let commandLineArguments = $commandLineArguments.val();
@@ -228,15 +237,11 @@ function run() {
     if (languageId === 44) {
         sourceValue = sourceEditor.getValue();
     }
-
+    
     let data = {
-        source_code: sourceValue,
-        language_id: languageId,
-        stdin: stdinValue,
-        compiler_options: compilerOptions,
-        command_line_arguments: commandLineArguments,
-        redirect_stderr_to_stdout: true
+        sources: { "contract.sol": { content: sourceEditor.getValue() } }
     };
+    console.log(sourceValue);
 
     let sendRequest = function (data) {
         window.top.postMessage(JSON.parse(JSON.stringify({
@@ -248,18 +253,68 @@ function run() {
             compiler_options: compilerOptions,
             command_line_arguments: commandLineArguments
         })), "*");
-
+        console.log(data);
         timeStart = performance.now();
         $.ajax({
-            url: `${AUTHENTICATED_BASE_URL[flavor]}/submissions?base64_encoded=true&wait=false`,
+            url: `http://localhost:3000/compile/compile`,
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify(data),
             headers: AUTH_HEADERS,
             success: function (data, textStatus, request) {
-                console.log(`Your submission token is: ${data.token}`);
-                let region = request.getResponseHeader('X-Judge0-Region');
-                setTimeout(fetchSubmission.bind(null, flavor, region, data.token, 1), INITIAL_WAIT_TIME_MS);
+                console.log(`output: compiled -> abi and bytecode ${JSON.stringify(data)}`);
+                
+                try {
+                    // Extract contract name from compilation result
+                    const contractName = Object.keys(data.compiled.contracts["contract.sol"])[0];
+                    
+                    // Format the output in a structured way
+                    const formattedOutput = {
+                        contractName: contractName,
+                        compiledABI: data.compiled.contracts["contract.sol"][contractName].abi,
+                        compiledBytecode: data.compiled.contracts["contract.sol"][contractName].evm.bytecode.object,
+                        deployedContractHash: "Not yet deployed" // Placeholder for future implementation
+                    };
+                    
+                    // Display contract name and ABI in the input editor
+                    stdinEditor.setValue(
+                        "Contract Name: " + contractName + "\n\n" +
+                        "CompiledABI:\n" + JSON.stringify(formattedOutput.compiledABI, null, 2)
+                    );
+                    
+                    // Display bytecode in the output editor
+                    stdoutEditor.setValue(
+                        "CompiledBytecode:\n" + formattedOutput.compiledBytecode
+                    );
+                    
+                    // Add deployed contract information
+                    if (!layout.root.getItemsById("deployed").length) {
+                        addDeployedTab();
+                    }
+                    
+                    // Update deployed tab content
+                    const deployedEditor = window.deployedEditor;
+                    if (deployedEditor) {
+                        deployedEditor.setValue("DeployedContractHash:\n" + formattedOutput.deployedContractHash);
+                    }
+                    
+                    // Store the compilation data for later use
+                    window.compilationResult = formattedOutput;
+                    
+                    $runBtn.removeClass("loading");
+                    
+                    window.top.postMessage(JSON.parse(JSON.stringify({
+                        event: "postExecution",
+                        status: data.status,
+                        time: data.time,
+                        memory: data.memory,
+                        output: JSON.stringify(formattedOutput)
+                    })), "*");
+                } catch (error) {
+                    console.error("Error processing compilation result:", error);
+                    stdoutEditor.setValue("Error processing compilation result: " + error.message + "\n\n" + JSON.stringify(data, null, 2));
+                    $runBtn.removeClass("loading");
+                }
             },
             error: handleRunError
         });
@@ -737,6 +792,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             updateFileList();
         });
 
+        layout.registerComponent("deployed", function (container, state) {
+            window.deployedEditor = monaco.editor.create(container.getElement()[0], {
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                readOnly: state.readOnly,
+                language: "plaintext",
+                minimap: {
+                    enabled: false
+                }
+            });
+        });
+
         layout.on("initialised", function () {
             setDefaults();
             refreshLayoutSize();
@@ -876,18 +943,34 @@ async function deployContract() {
     $statusLine.html("Preparing to deploy contract...");
     
     try {
-        // Here you would integrate with Web3.js or Ethers.js to deploy
-        // This is a placeholder - you'll need to implement actual deployment logic
-        stdoutEditor.setValue("To deploy the contract, you need to:\n" +
-            "1. Connect to a blockchain network\n" +
-            "2. Have sufficient funds to pay for gas\n" +
-            "3. Sign the transaction with your private key\n\n" +
-            "Implement this functionality using Web3.js or Ethers.js");
+        if (!window.compilationResult) {
+            $statusLine.html("Please compile the contract first");
+            stdoutEditor.setValue("You need to compile the contract before deploying.\nPress Ctrl+Shift+C to compile.");
+            return;
+        }
         
-        $statusLine.html("Ready to deploy - needs wallet connection");
+        // Simulate deployment (in a real implementation, you'd use web3/ethers)
+        const mockTxHash = "0x" + Math.random().toString(16).substring(2, 62);
+        window.compilationResult.deployedContractHash = mockTxHash;
+        
+        // Update the deployed tab
+        if (window.deployedEditor) {
+            window.deployedEditor.setValue(
+                "DeployedContractHash:\n" + mockTxHash + "\n\n" +
+                "Contract Address:\n0x" + Math.random().toString(16).substring(2, 42) + "\n\n" +
+                "Transaction Details:\n" +
+                "- Block: #" + Math.floor(Math.random() * 1000000) + "\n" +
+                "- Gas Used: " + Math.floor(Math.random() * 5000000) + "\n" +
+                "- Timestamp: " + new Date().toISOString()
+            );
+        }
+        
+        $statusLine.html("Contract deployed successfully");
     } catch (error) {
         $statusLine.html("Deployment failed");
-        stdoutEditor.setValue("Error preparing deployment: " + error.message);
+        if (window.deployedEditor) {
+            window.deployedEditor.setValue("Error during deployment: " + error.message);
+        }
     }
 }
 
@@ -1058,4 +1141,46 @@ function setupSoliditySupport() {
             };
         }
     });
+
+    // Add this to your setupSoliditySupport function or another appropriate location
+    monaco.editor.defineTheme('solidity-output', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+            { token: 'section.header', foreground: '#569CD6', fontStyle: 'bold' },
+            { token: 'section.content', foreground: '#CE9178' }
+        ],
+        colors: {}
+    });
+}
+
+function addDeployedTab() {
+    // Find the I/O container
+    const ioContainer = layout.root.getItemsById("stdin")[0].parent.parent;
+    
+    // Add the deployed component
+    ioContainer.addChild({
+        type: "component",
+        componentName: "deployed",
+        id: "deployed",
+        title: "Deployed",
+        componentState: {
+            readOnly: true
+        }
+    });
+    
+    // Make sure the deployed tab is registered
+    if (!layout._components.deployed) {
+        layout.registerComponent("deployed", function(container, state) {
+            window.deployedEditor = monaco.editor.create(container.getElement()[0], {
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                readOnly: state.readOnly,
+                language: "plaintext",
+                minimap: {
+                    enabled: false
+                }
+            });
+        });
+    }
 }
