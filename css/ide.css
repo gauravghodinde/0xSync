@@ -1,0 +1,103 @@
+.judge0-file-menu {
+    min-width: 15rem !important;
+}
+
+#judge0-chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+#judge0-chat-container > .ui.menu {
+    border-bottom: none;
+}
+
+#judge0-chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+#judge0-chat-messages pre {
+    overflow-x: auto;
+}
+
+.judge0-user-message {
+    margin-left: auto !important;
+    margin-right: 1em !important;
+    margin-top: 1em !important;
+    max-width: 66%;
+    overflow-wrap: break-word;
+    width: fit-content;
+}
+
+#judge0-chat-input-container {
+    margin-top: 0;
+}
+
+#judge0-status-line:empty {
+    display: none;
+}
+
+.judge0-hidden, .judge0-style-hidden {
+    display: none !important;
+}
+
+@media (display-mode: standalone) {
+    .judge0-standalone-hidden {
+        display: none !important;
+    }
+}
+
+/* File explorer styling with dark mode support */
+.file-explorer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: inherit;
+    border-right: 1px solid var(--border-color, #ddd);
+    padding: 0;
+}
+
+#file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+#file-list li {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-light, #eee);
+    transition: background-color 0.2s;
+}
+
+#file-list li:hover {
+    background-color: var(--hover-bg, rgba(200, 200, 200, 0.2));
+}
+
+#file-list li.active {
+    background-color: var(--active-bg, rgba(150, 150, 150, 0.3));
+    font-weight: bold;
+}
+
+.file-explorer .ui.button {
+    margin: 8px;
+}
+
+/* Add these CSS variables that will be updated by the theme system */
+body {
+    --border-color: #ddd;
+    --border-light: #eee;
+    --hover-bg: rgba(200, 200, 200, 0.2);
+    --active-bg: rgba(150, 150, 150, 0.3);
+}
+
+body.inverted {
+    --border-color: #444;
+    --border-light: #333;
+    --hover-bg: rgba(70, 70, 70, 0.6);
+    --active-bg: rgba(80, 80, 80, 0.8);
+}
